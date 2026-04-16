@@ -1,13 +1,82 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model Usuario {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  nombre    String
+  rol       Rol      @default(SECRETARIA)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Rol {
+  ADMIN
+  SECRETARIA
+}
+
+model AnoEscolar {
+  id          String       @id @default(uuid())
+  anio        Int          @unique
+  fechaInicio DateTime
+  fechaFin    DateTime
+  activo      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  maestros    MaestroAno[]
+  permisos    Permiso[]
+}
+
+model Maestro {
+  id               String       @id @default(uuid())
+  nipEscalafon     String       @unique
+  nombreCompleto   String
+  tipoContratacion String       // "Sueldo Base", "Sobre Sueldo", "Horas Clase"
+  activo           Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  anos             MaestroAno[]
+  permisos         Permiso[]
+}
+
+model MaestroAno {
+  id              String     @id @default(uuid())
+  maestroId       String
+  anoEscolarId    String
+  // Guardamos en minutos totales para facilitar cálculos
+  // Límite enfermedad: 90 días = 43200 min
+  enfMinUsados    Int        @default(0)
+  // Límite personal: 5 días = 2400 min
+  persMinUsados   Int        @default(0)
+  maestro         Maestro    @relation(fields: [maestroId], references: [id])
+  anoEscolar      AnoEscolar @relation(fields: [anoEscolarId], references: [id])
+
+  @@unique([maestroId, anoEscolarId])
+}
+
+model Permiso {
+  id           String      @id @default(uuid())
+  maestroId    String
+  anoEscolarId String
+  tipo         TipoPermiso
+  fechaInicio  DateTime
+  fechaFin     DateTime
+  dias         Int         @default(0)
+  horas        Int         @default(0)
+  minutos      Int         @default(0)
+  totalMinutos Int         // calculado automáticamente al guardar
+  observacion  String?
+  creadoPor    String      // email del usuario que registró
+  createdAt    DateTime    @default(now())
+  maestro      Maestro     @relation(fields: [maestroId], references: [id])
+  anoEscolar   AnoEscolar  @relation(fields: [anoEscolarId], references: [id])
+}
+
+enum TipoPermiso {
+  ENFERMEDAD
+  PERSONAL
 }
