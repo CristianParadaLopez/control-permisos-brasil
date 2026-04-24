@@ -39,4 +39,14 @@ async function exportarExcel(req, res) {
   }
 }
 
-module.exports = { resumenMaestros, exportarExcel };
+async function anoActivo(req, res) {
+  try {
+    const ano = await prisma.anoEscolar.findFirst({ where: { activo: true } });
+    if (!ano) return res.status(404).json({ error: 'No hay año escolar activo' });
+    res.json(ano);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+module.exports = { resumenMaestros, exportarExcel, anoActivo };
