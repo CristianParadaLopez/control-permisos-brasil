@@ -6,5 +6,5 @@ router.use(authMiddleware);
 
 router.get('/resumen', ctrl.resumenMaestros);
 router.get('/excel',   ctrl.exportarExcel);
-
+router.get('/ano-activo', ctrl.anoActivo);
 module.exports = router;
