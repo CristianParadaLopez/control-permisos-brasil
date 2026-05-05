@@ -47,7 +47,7 @@ function ModalNuevoMaestro({ onClose, onCreado }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <div className="border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-white">Nuevo Maestro</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition">
@@ -141,7 +141,7 @@ export default function ListaMaestros() {
         </svg>
         <input
           value={busqueda} onChange={e => setBusqueda(e.target.value)}
-          className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+          className="w-full border border-slate-700 text-white placeholder-slate-500 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
           placeholder="Buscar por nombre o NIP..."
         />
       </div>
@@ -163,7 +163,7 @@ export default function ListaMaestros() {
           {filtrados.map(m => (
             <div key={m.id}
               onClick={() => navigate(`/maestros/${m.id}`)}
-              className="group bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 rounded-2xl p-4 cursor-pointer transition-all duration-200">
+              className="group bg-slate-800/60 hover:border border-slate-700/50 hover:border-slate-600 rounded-2xl p-4 cursor-pointer transition-all duration-200">
               <div className="flex items-start justify-between gap-4">
                 {/* Info principal */}
                 <div className="flex items-center gap-3 min-w-0">
