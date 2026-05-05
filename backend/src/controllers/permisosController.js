@@ -48,7 +48,7 @@ async function crear(req, res) {
         fechaFin:    new Date(fechaFin),
         dias:    Number(dias)    || 0,
         horas:   Number(horas)   || 0,
-        minutos: Number(minutos) || 0,
+        minutos: Number(minutos) || 0,  
         totalMinutos,
         observacion,
         creadoPor: req.usuario.email,
