@@ -1,12 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getMaestros } from '../../services/maestrosService';
 import api from '../../services/api';
+
+const C = {
+  verde: '#248842',
+  verdeOscuro: '#1a6b32',
+  verdeClaro: '#e8f5ec',
+  amarillo: '#FAD327',
+  amarilloClaro: '#fef9e0',
+  marron: '#7A3F25',
+  marronClaro: '#f5ebe6',
+  blanco: '#FFFFFF',
+  negro: '#000000',
+  gris: '#f5f5f5',
+  grisMedio: '#e5e5e5',
+};
 
 export default function RegistroPermiso() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const maestroIdInicial = searchParams.get('maestroId') || '';
+  const dropdownRef = useRef(null);
 
   const [maestros, setMaestros] = useState([]);
   const [maestrosFiltrados, setMaestrosFiltrados] = useState([]);
@@ -29,10 +44,20 @@ export default function RegistroPermiso() {
     observacion: '',
   });
 
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setMostrarLista(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   useEffect(() => {
     getMaestros().then(lista => {
       setMaestros(lista);
-      // Si viene maestroId desde la URL, pre-seleccionar
       if (maestroIdInicial) {
         const m = lista.find(x => x.id === maestroIdInicial);
         if (m) {
@@ -43,7 +68,6 @@ export default function RegistroPermiso() {
     }).finally(() => setCargando(false));
   }, [maestroIdInicial]);
 
-  // Filtrar maestros según búsqueda
   useEffect(() => {
     if (!busquedaMaestro.trim()) {
       setMaestrosFiltrados([]);
@@ -52,13 +76,12 @@ export default function RegistroPermiso() {
     const q = busquedaMaestro.toLowerCase();
     setMaestrosFiltrados(
       maestros.filter(m =>
-        m.nombreCompleto.toLowerCase().includes(q) ||
-        m.nipEscalafon.toLowerCase().includes(q)
+        m.nombreCompleto?.toLowerCase().includes(q) ||
+        m.nipEscalafon?.toLowerCase().includes(q)
       ).slice(0, 6)
     );
   }, [busquedaMaestro, maestros]);
 
-  // Calcular días entre fechas automáticamente
   useEffect(() => {
     if (form.fechaInicio && form.fechaFin) {
       const inicio = new Date(form.fechaInicio);
@@ -83,8 +106,9 @@ export default function RegistroPermiso() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setExito('');
     if (!form.maestroId) { setError('Debes seleccionar un maestro'); return; }
-    if (totalMinutos === 0) { setError('Debes ingresar al menos 1 minuto'); return; }
+    if (totalMinutos === 0) { setError('Debes ingresar al menos 1 minuto de permiso'); return; }
     setEnviando(true);
     try {
       const { data: ano } = await api.get('/reportes/ano-activo');
@@ -99,44 +123,73 @@ export default function RegistroPermiso() {
       setTimeout(() => {
         if (maestroIdInicial) navigate(`/maestros/${maestroIdInicial}`);
         else navigate('/maestros');
-      }, 1200);
+      }, 1500);
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al registrar permiso');
+      setError(err.response?.data?.error || 'Error al registrar el permiso. Intenta de nuevo.');
     } finally {
       setEnviando(false);
     }
   };
 
-  const inputCls = "w-full bg-slate-700 border border-slate-600 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition";
-  const labelCls = "block text-sm font-medium text-slate-300 mb-1.5";
+  const inputCls = "w-full rounded-xl px-4 py-3 text-sm border-2 bg-white text-black placeholder-gray-400 outline-none transition-all duration-200 hover:border-[#248842] focus:border-[#248842] focus:shadow-[0_0_0_4px_rgba(36,136,66,0.12)]";
+  const labelCls = "block text-sm font-bold mb-1.5";
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 pb-10">
+      {/* Header */}
       <div>
-        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white transition mb-3">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+        <button
+          onClick={() => navigate(-1)}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold mb-3 transition-colors hover:underline"
+          style={{ color: C.marron }}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
           Atrás
         </button>
-        <h1 className="text-2xl font-bold text-white">Registrar Permiso</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Ingresa los datos del permiso del maestro</p>
+        <h1 className="text-3xl font-black tracking-tight" style={{ color: C.verde }}>
+          Registrar Permiso
+        </h1>
+        <p className="text-sm mt-1 font-medium" style={{ color: C.marron }}>
+          Ingresa los datos del permiso del docente
+        </p>
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-5">
+      {/* Card principal */}
+      <div className="rounded-2xl border-2 p-6 space-y-5 shadow-sm" style={{ backgroundColor: C.blanco, borderColor: `${C.verde}20` }}>
+        {error && (
+          <div className="rounded-xl p-4 text-sm border-l-4 animate-shake" style={{ backgroundColor: C.marronClaro, borderColor: C.marron, color: C.marron }}>
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          </div>
+        )}
 
-        {error && <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl p-3">{error}</p>}
-        {exito && <p className="text-emerald-400 text-sm bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">✓ {exito}</p>}
+        {exito && (
+          <div className="rounded-xl p-4 text-sm border-l-4 animate-fadeIn" style={{ backgroundColor: C.verdeClaro, borderColor: C.verde, color: C.verdeOscuro }}>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-bold">{exito}</span>
+            </div>
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Búsqueda de maestro */}
-          <div className="relative">
-            <label className={labelCls}>Buscar maestro</label>
+          <div className="relative" ref={dropdownRef}>
+            <label className={labelCls} style={{ color: C.marron }}>Buscar maestro <span className="text-red-500">*</span></label>
             {cargando ? (
-              <div className="h-10 bg-slate-700 rounded-xl animate-pulse" />
+              <div className="h-12 rounded-xl animate-pulse" style={{ backgroundColor: C.gris }} />
             ) : (
               <>
                 <div className="relative">
-                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none" style={{ color: C.verde }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input
@@ -148,32 +201,39 @@ export default function RegistroPermiso() {
                       setMostrarLista(true);
                     }}
                     onFocus={() => setMostrarLista(true)}
-                    className={`${inputCls} pl-10 ${maestroSeleccionado ? 'border-emerald-500' : ''}`}
+                    className={`${inputCls} pl-11 ${maestroSeleccionado ? 'border-[#248842]' : 'border-gray-200'}`}
                     placeholder="Escribe el nombre o NIP del maestro..."
+                    autoComplete="off"
                   />
                   {maestroSeleccionado && (
-                    <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: C.verde }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </div>
 
                 {/* Lista desplegable */}
                 {mostrarLista && maestrosFiltrados.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-slate-700 border border-slate-600 rounded-xl overflow-hidden shadow-xl">
-                    {maestrosFiltrados.map(m => (
+                  <div className="absolute z-20 w-full mt-2 rounded-xl overflow-hidden shadow-xl border-2 animate-slideDown" style={{ backgroundColor: C.blanco, borderColor: `${C.verde}30` }}>
+                    {maestrosFiltrados.map((m, idx) => (
                       <button
                         key={m.id}
                         type="button"
                         onClick={() => seleccionarMaestro(m)}
-                        className="w-full text-left px-4 py-3 hover:bg-slate-600 transition flex items-center gap-3 border-b border-slate-600/50 last:border-0"
+                        className="w-full text-left px-4 py-3 flex items-center gap-3 transition-all duration-150 hover:pl-5"
+                        style={{
+                          borderBottom: idx < maestrosFiltrados.length - 1 ? `1px solid ${C.grisMedio}` : 'none',
+                          backgroundColor: C.blanco
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = C.verdeClaro; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = C.blanco; }}
                       >
-                        <div className="w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center shrink-0">
-                          <span className="text-blue-400 text-xs font-bold">{m.nombreCompleto.charAt(0)}</span>
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-black text-sm" style={{ backgroundColor: `${C.verde}15`, color: C.verde }}>
+                          {m.nombreCompleto?.charAt(0) || '?'}
                         </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">{m.nombreCompleto}</p>
-                          <p className="text-slate-400 text-xs">NIP {m.nipEscalafon} · {m.tipoContratacion}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate" style={{ color: C.negro }}>{m.nombreCompleto}</p>
+                          <p className="text-xs font-medium" style={{ color: C.marron }}>NIP {m.nipEscalafon} · {m.tipoContratacion}</p>
                         </div>
                       </button>
                     ))}
@@ -181,51 +241,87 @@ export default function RegistroPermiso() {
                 )}
 
                 {maestroSeleccionado && (
-                  <div className="mt-2 flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2">
-                    <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 border" style={{ backgroundColor: C.verdeClaro, borderColor: `${C.verde}30` }}>
+                    <svg className="w-5 h-5 shrink-0" style={{ color: C.verde }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
-                    <span className="text-emerald-300 text-xs">{maestroSeleccionado.nombreCompleto} — NIP {maestroSeleccionado.nipEscalafon}</span>
+                    <span className="text-xs font-bold" style={{ color: C.verdeOscuro }}>
+                      {maestroSeleccionado.nombreCompleto} — NIP {maestroSeleccionado.nipEscalafon}
+                    </span>
                   </div>
                 )}
               </>
             )}
           </div>
 
-          {/* Tipo */}
+          {/* Tipo de permiso */}
           <div>
-            <label className={labelCls}>Tipo de permiso</label>
+            <label className={labelCls} style={{ color: C.marron }}>Tipo de permiso</label>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { value: 'ENFERMEDAD', label: 'Por Enfermedad', sub: '90 días con constancia médica', color: 'purple' },
-                { value: 'PERSONAL', label: 'Personal', sub: '5 días sin justificación', color: 'cyan' },
-              ].map(t => (
-                <button key={t.value} type="button" onClick={() => set('tipo', t.value)}
-                  className={`p-4 rounded-xl border text-left transition ${form.tipo === t.value
-                    ? t.color === 'purple' ? 'border-purple-500 bg-purple-500/10' : 'border-cyan-500 bg-cyan-500/10'
-                    : 'border-slate-600 bg-slate-700/50 hover:border-slate-500'}`}>
-                  <p className={`font-semibold text-sm ${form.tipo === t.value ? t.color === 'purple' ? 'text-purple-300' : 'text-cyan-300' : 'text-white'}`}>{t.label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{t.sub}</p>
-                </button>
-              ))}
+                { value: 'ENFERMEDAD', label: 'Por Enfermedad', sub: '90 días con constancia médica', esVerde: true },
+                { value: 'PERSONAL', label: 'Personal', sub: '5 días sin justificación', esVerde: false },
+              ].map(t => {
+                const activo = form.tipo === t.value;
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => set('tipo', t.value)}
+                    className="relative p-4 rounded-xl border-2 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                    style={{
+                      backgroundColor: activo ? (t.esVerde ? C.verdeClaro : C.amarilloClaro) : C.blanco,
+                      borderColor: activo ? (t.esVerde ? C.verde : C.amarillo) : C.grisMedio,
+                      boxShadow: activo ? `0 4px 12px ${t.esVerde ? 'rgba(36,136,66,0.15)' : 'rgba(250,211,39,0.25)'}` : 'none'
+                    }}
+                  >
+                    {activo && (
+                      <div className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: t.esVerde ? C.verde : C.amarillo }}>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke={t.esVerde ? C.blanco : C.negro} strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                    <p className="font-bold text-sm" style={{ color: activo ? (t.esVerde ? C.verdeOscuro : C.marron) : C.negro }}>
+                      {t.label}
+                    </p>
+                    <p className="text-xs mt-1 font-medium" style={{ color: C.marron, opacity: 0.8 }}>{t.sub}</p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Fecha inicio</label>
-              <input type="date" value={form.fechaInicio} onChange={e => set('fechaInicio', e.target.value)} required className={inputCls} />
+              <label className={labelCls} style={{ color: C.marron }}>Fecha inicio <span className="text-red-500">*</span></label>
+              <input
+                type="date"
+                value={form.fechaInicio}
+                onChange={e => set('fechaInicio', e.target.value)}
+                required
+                className={inputCls}
+                style={{ borderColor: form.fechaInicio ? `${C.verde}50` : '#e5e5e5', colorScheme: 'light' }}
+              />
             </div>
             <div>
-              <label className={labelCls}>Fecha fin</label>
-              <input type="date" value={form.fechaFin} onChange={e => set('fechaFin', e.target.value)} required className={inputCls} min={form.fechaInicio} />
+              <label className={labelCls} style={{ color: C.marron }}>Fecha fin <span className="text-red-500">*</span></label>
+              <input
+                type="date"
+                value={form.fechaFin}
+                onChange={e => set('fechaFin', e.target.value)}
+                required
+                min={form.fechaInicio}
+                className={inputCls}
+                style={{ borderColor: form.fechaFin ? `${C.verde}50` : '#e5e5e5', colorScheme: 'light' }}
+              />
             </div>
           </div>
 
-          {/* Tiempo */}
+          {/* Duración */}
           <div>
-            <label className={labelCls}>Duración del permiso</label>
+            <label className={labelCls} style={{ color: C.marron }}>Duración del permiso</label>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { key: 'dias', label: 'Días', max: 90 },
@@ -233,21 +329,25 @@ export default function RegistroPermiso() {
                 { key: 'minutos', label: 'Minutos', max: 59 },
               ].map(f => (
                 <div key={f.key}>
-                  <label className="block text-xs text-slate-400 mb-1 text-center">{f.label}</label>
+                  <label className="block text-xs font-bold mb-1.5 text-center uppercase tracking-wide" style={{ color: C.marron }}>{f.label}</label>
                   <input
-                    type="number" min="0" max={f.max}
-                    value={form[f.key]} onChange={e => set(f.key, e.target.value)}
-                    className={`${inputCls} text-center text-lg font-mono`}
+                    type="number"
+                    min="0"
+                    max={f.max}
+                    value={form[f.key]}
+                    onChange={e => set(f.key, e.target.value)}
+                    className={`${inputCls} text-center text-lg font-mono font-bold`}
+                    style={{ borderColor: '#e5e5e5' }}
                   />
                 </div>
               ))}
             </div>
             {totalMinutos > 0 && (
-              <div className="mt-3 bg-slate-700/50 rounded-xl p-3 flex items-center justify-between">
-                <span className="text-xs text-slate-400">Total calculado</span>
-                <span className="font-mono text-sm font-semibold text-white">
-                  {Math.floor(totalMinutos / (8*60))}d {Math.floor((totalMinutos % (8*60)) / 60)}h {totalMinutos % 60}m
-                  <span className="text-slate-400 font-normal ml-1">({totalMinutos} min)</span>
+              <div className="mt-3 rounded-xl p-4 flex items-center justify-between border" style={{ backgroundColor: C.verdeClaro, borderColor: `${C.verde}25` }}>
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: C.verdeOscuro }}>Total calculado</span>
+                <span className="font-mono text-sm font-bold" style={{ color: C.verdeOscuro }}>
+                  {Math.floor(totalMinutos / (8 * 60))}d {Math.floor((totalMinutos % (8 * 60)) / 60)}h {totalMinutos % 60}m
+                  <span className="font-normal ml-1.5 opacity-70">({totalMinutos} min)</span>
                 </span>
               </div>
             )}
@@ -255,26 +355,69 @@ export default function RegistroPermiso() {
 
           {/* Observación */}
           <div>
-            <label className={labelCls}>Observación <span className="text-slate-500 font-normal">(opcional)</span></label>
+            <label className={labelCls} style={{ color: C.marron }}>
+              Observación <span className="font-normal opacity-60">(opcional)</span>
+            </label>
             <textarea
-              value={form.observacion} onChange={e => set('observacion', e.target.value)}
-              rows={2} className={inputCls}
-              placeholder="ej. Gripe, cita médica, diligencia personal..."
+              value={form.observacion}
+              onChange={e => set('observacion', e.target.value)}
+              rows={3}
+              className={inputCls}
+              style={{ borderColor: '#e5e5e5', resize: 'vertical' }}
+              placeholder="Ej. Gripe, cita médica, diligencia personal..."
             />
           </div>
 
+          {/* Botones */}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => navigate(-1)}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-medium transition">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:shadow-md active:scale-95"
+              style={{ backgroundColor: C.gris, color: C.marron }}
+            >
               Cancelar
             </button>
-            <button type="submit" disabled={enviando || !!exito}
-              className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-semibold transition shadow-lg shadow-blue-500/20">
-              {enviando ? 'Guardando...' : exito ? '✓ Guardado' : 'Registrar permiso'}
+            <button
+              type="submit"
+              disabled={enviando || !!exito}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 active:scale-95 disabled:opacity-60 disabled:hover:translate-y-0 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: C.verde,
+                boxShadow: '0 4px 14px rgba(36,136,66,0.35)'
+              }}
+            >
+              {enviando ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Guardando...
+                </span>
+              ) : exito ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Guardado
+                </span>
+              ) : (
+                'Registrar permiso'
+              )}
             </button>
           </div>
         </form>
       </div>
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        .animate-slideDown { animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-shake { animation: shake 0.4s ease-in-out; }
+      `}</style>
     </div>
   );
 }
