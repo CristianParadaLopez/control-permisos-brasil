@@ -82,16 +82,9 @@ export default function RegistroPermiso() {
     );
   }, [busquedaMaestro, maestros]);
 
-  useEffect(() => {
-    if (form.fechaInicio && form.fechaFin) {
-      const inicio = new Date(form.fechaInicio);
-      const fin = new Date(form.fechaFin);
-      if (fin >= inicio) {
-        const diff = Math.floor((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
-        setForm(f => ({ ...f, dias: diff }));
-      }
-    }
-  }, [form.fechaInicio, form.fechaFin]);
+  // ✅ ELIMINADO: El useEffect que auto-calculaba días entre fechas
+  // Las fechas ahora son solo referencia/informativas
+  // Los días/horas/minutos los ingresa el usuario manualmente
 
   const seleccionarMaestro = (m) => {
     setMaestroSeleccionado(m);
@@ -101,17 +94,30 @@ export default function RegistroPermiso() {
   };
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  
+  // ✅ CORREGIDO: Total minutos solo suma lo que el usuario ingresa manualmente
   const totalMinutos = (Number(form.dias) * 8 * 60) + (Number(form.horas) * 60) + Number(form.minutos);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setExito('');
-    if (!form.maestroId) { setError('Debes seleccionar un maestro'); return; }
-    if (totalMinutos === 0) { setError('Debes ingresar al menos 1 minuto de permiso'); return; }
+    
+    if (!form.maestroId) { 
+      setError('Debes seleccionar un maestro'); 
+      return; 
+    }
+    if (totalMinutos === 0) { 
+      setError('Debes ingresar al menos 1 minuto de permiso'); 
+      return; 
+    }
+    
     setEnviando(true);
     try {
       const { data: ano } = await api.get('/reportes/ano-activo');
+      
+      // ✅ CORREGIDO: Enviamos las fechas como strings Y los valores manualmente
+      // El backend las guarda como referencia, el cálculo real es dias+horas+minutos
       await api.post('/permisos', {
         ...form,
         anoEscolarId: ano.id,
@@ -119,6 +125,7 @@ export default function RegistroPermiso() {
         horas: Number(form.horas),
         minutos: Number(form.minutos),
       });
+      
       setExito('Permiso registrado correctamente');
       setTimeout(() => {
         if (maestroIdInicial) navigate(`/maestros/${maestroIdInicial}`);
@@ -183,7 +190,9 @@ export default function RegistroPermiso() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Búsqueda de maestro */}
           <div className="relative" ref={dropdownRef}>
-            <label className={labelCls} style={{ color: C.marron }}>Buscar maestro <span className="text-red-500">*</span></label>
+            <label className={labelCls} style={{ color: C.marron }}>
+              Buscar maestro <span className="text-red-500">*</span>
+            </label>
             {cargando ? (
               <div className="h-12 rounded-xl animate-pulse" style={{ backgroundColor: C.gris }} />
             ) : (
@@ -212,7 +221,6 @@ export default function RegistroPermiso() {
                   )}
                 </div>
 
-                {/* Lista desplegable */}
                 {mostrarLista && maestrosFiltrados.length > 0 && (
                   <div className="absolute z-20 w-full mt-2 rounded-xl overflow-hidden shadow-xl border-2 animate-slideDown" style={{ backgroundColor: C.blanco, borderColor: `${C.verde}30` }}>
                     {maestrosFiltrados.map((m, idx) => (
@@ -295,7 +303,9 @@ export default function RegistroPermiso() {
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls} style={{ color: C.marron }}>Fecha inicio <span className="text-red-500">*</span></label>
+              <label className={labelCls} style={{ color: C.marron }}>
+                Fecha inicio <span className="text-red-500">*</span>
+              </label>
               <input
                 type="date"
                 value={form.fechaInicio}
@@ -306,7 +316,9 @@ export default function RegistroPermiso() {
               />
             </div>
             <div>
-              <label className={labelCls} style={{ color: C.marron }}>Fecha fin <span className="text-red-500">*</span></label>
+              <label className={labelCls} style={{ color: C.marron }}>
+                Fecha fin <span className="text-red-500">*</span>
+              </label>
               <input
                 type="date"
                 value={form.fechaFin}
@@ -319,14 +331,22 @@ export default function RegistroPermiso() {
             </div>
           </div>
 
-          {/* Duración */}
+          {/* ✅ CORREGIDO: Duración con helper text explicativo */}
           <div>
-            <label className={labelCls} style={{ color: C.marron }}>Duración del permiso</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className={labelCls} style={{ color: C.marron }}>Duración del permiso</label>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide" style={{ backgroundColor: C.amarilloClaro, color: C.marron }}>
+                Ingresa manualmente
+              </span>
+            </div>
+            <p className="text-xs mb-3 font-medium" style={{ color: C.grisTexto }}>
+              Las fechas son solo referencia. Ingresa aquí el tiempo real del permiso.
+            </p>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { key: 'dias', label: 'Días', max: 90 },
-                { key: 'horas', label: 'Horas', max: 7 },
-                { key: 'minutos', label: 'Minutos', max: 59 },
+                { key: 'dias', label: 'Días', max: 90, placeholder: '0' },
+                { key: 'horas', label: 'Horas', max: 7, placeholder: '0' },
+                { key: 'minutos', label: 'Minutos', max: 59, placeholder: '0' },
               ].map(f => (
                 <div key={f.key}>
                   <label className="block text-xs font-bold mb-1.5 text-center uppercase tracking-wide" style={{ color: C.marron }}>{f.label}</label>
@@ -338,6 +358,7 @@ export default function RegistroPermiso() {
                     onChange={e => set(f.key, e.target.value)}
                     className={`${inputCls} text-center text-lg font-mono font-bold`}
                     style={{ borderColor: '#e5e5e5' }}
+                    placeholder={f.placeholder}
                   />
                 </div>
               ))}
