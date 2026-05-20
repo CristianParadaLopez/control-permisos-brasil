@@ -56,7 +56,8 @@ export default function RegistroPermiso() {
   }, []);
 
   useEffect(() => {
-    getMaestros().then(lista => {
+    getMaestros({ limite: 200 }).then(res => {
+      const lista = res.data || [];   // ← extraer el array
       setMaestros(lista);
       if (maestroIdInicial) {
         const m = lista.find(x => x.id === maestroIdInicial);
@@ -96,8 +97,7 @@ export default function RegistroPermiso() {
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
   
   // ✅ CORREGIDO: Total minutos solo suma lo que el usuario ingresa manualmente
-  const totalMinutos = (Number(form.dias) * 8 * 60) + (Number(form.horas) * 60) + Number(form.minutos);
-
+  const totalMinutos = (Number(form.dias) * 5 * 60) + (Number(form.horas) * 60) + Number(form.minutos);
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -367,7 +367,7 @@ export default function RegistroPermiso() {
               <div className="mt-3 rounded-xl p-4 flex items-center justify-between border" style={{ backgroundColor: C.verdeClaro, borderColor: `${C.verde}25` }}>
                 <span className="text-xs font-bold uppercase tracking-wide" style={{ color: C.verdeOscuro }}>Total calculado</span>
                 <span className="font-mono text-sm font-bold" style={{ color: C.verdeOscuro }}>
-                  {Math.floor(totalMinutos / (8 * 60))}d {Math.floor((totalMinutos % (8 * 60)) / 60)}h {totalMinutos % 60}m
+                  {Math.floor(totalMinutos / (5 * 60))}d {Math.floor((totalMinutos % (5 * 60)) / 60)}h {totalMinutos % 60}m
                   <span className="font-normal ml-1.5 opacity-70">({totalMinutos} min)</span>
                 </span>
               </div>

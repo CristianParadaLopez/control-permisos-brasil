@@ -70,23 +70,20 @@ function Layout({ children }) {
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: C.grisFondo }}>
-      {/* Sidebar Desktop */}
+
+      {/* ── Sidebar Desktop — fixed, siempre visible ── */}
       <aside
-        className="w-64 flex-col hidden md:flex shrink-0"
+        className="w-64 hidden md:flex flex-col fixed top-0 left-0 h-screen"
         style={{ backgroundColor: C.verde, borderRight: `2px solid ${C.verdeOscuro}` }}
       >
-        {/* Logo / Header */}
-        <div className="p-5" style={{ borderBottom: `2px solid ${C.verdeOscuro}` }}>
+        {/* Logo — siempre arriba, nunca se mueve */}
+        <div className="p-5 shrink-0" style={{ borderBottom: `2px solid ${C.verdeOscuro}` }}>
           <div className="flex items-center gap-3">
             <div
               className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden shadow-md"
               style={{ backgroundColor: C.amarillo, border: `2px solid ${C.amarilloHover}` }}
             >
-              <img
-                src="/logo.webp"
-                alt="Logo institución"
-                className="w-9 h-9 object-contain"
-              />
+              <img src="/logo.webp" alt="Logo institución" className="w-9 h-9 object-contain" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-black leading-tight truncate" style={{ color: C.blanco }}>
@@ -99,8 +96,8 @@ function Layout({ children }) {
           </div>
         </div>
 
-        {/* Navegación */}
-        <nav className="p-3 flex-1 space-y-1.5">
+        {/* Nav — flex-1 + overflow-y-auto: hace scroll interno si hay muchos items */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1.5">
           {navItems.map(item => {
             const active = location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
             return (
@@ -125,7 +122,6 @@ function Layout({ children }) {
                   }
                 }}
               >
-                {/* Indicador activo */}
                 {active && (
                   <span
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
@@ -141,8 +137,8 @@ function Layout({ children }) {
           })}
         </nav>
 
-        {/* Footer usuario */}
-        <div className="p-3" style={{ borderTop: `2px solid ${C.verdeOscuro}` }}>
+        {/* Footer usuario — siempre abajo, nunca se mueve */}
+        <div className="p-3 shrink-0" style={{ borderTop: `2px solid ${C.verdeOscuro}` }}>
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl" style={{ backgroundColor: C.verdeOscuro }}>
             <div
               className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-black text-sm shadow-sm"
@@ -163,8 +159,14 @@ function Layout({ children }) {
               title="Cerrar sesión"
               className="p-1.5 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
               style={{ color: C.blanco }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = C.amarillo; e.currentTarget.style.backgroundColor = C.verde; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = C.blanco; e.currentTarget.style.backgroundColor = 'transparent'; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = C.amarillo;
+                e.currentTarget.style.backgroundColor = C.verde;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = C.blanco;
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -174,7 +176,7 @@ function Layout({ children }) {
         </div>
       </aside>
 
-      {/* Top bar Mobile */}
+      {/* ── Top bar Mobile ── */}
       <div
         className="md:hidden fixed top-0 left-0 right-0 z-40 px-4 py-3 flex items-center justify-between shadow-sm"
         style={{ backgroundColor: C.verde, borderBottom: `2px solid ${C.verdeOscuro}` }}
@@ -198,7 +200,7 @@ function Layout({ children }) {
         </button>
       </div>
 
-      {/* Bottom nav Mobile */}
+      {/* ── Bottom nav Mobile ── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex shadow-[0_-4px_20px_rgba(0,0,0,0.1)]"
         style={{ backgroundColor: C.verde, borderTop: `2px solid ${C.verdeOscuro}` }}
@@ -210,9 +212,7 @@ function Layout({ children }) {
               key={item.to}
               to={item.to}
               className="flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold transition-all duration-200 relative"
-              style={{
-                color: active ? C.amarillo : 'rgba(255,255,255,0.6)',
-              }}
+              style={{ color: active ? C.amarillo : 'rgba(255,255,255,0.6)' }}
             >
               {active && (
                 <span
@@ -229,12 +229,13 @@ function Layout({ children }) {
         })}
       </nav>
 
-      {/* Contenido principal */}
-      <main className="flex-1 overflow-y-auto min-h-screen">
+      {/* ── Contenido principal — ml-64 para respetar el sidebar fijo ── */}
+      <main className="flex-1 overflow-y-auto min-h-screen md:ml-64">
         <div className="max-w-6xl mx-auto px-4 py-6 md:py-8 mt-14 md:mt-0 mb-20 md:mb-0">
           {children}
         </div>
       </main>
+
     </div>
   );
 }
