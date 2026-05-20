@@ -1,7 +1,7 @@
 //Constantes para convertir días, horas y minutos a un formato unificado de minutos, y viceversa. También incluye una función para calcular el saldo restante de permisos según el tipo (enfermedad o personal) y los minutos usados.
 const MINS_POR_HORA = 60;
-const HORAS_POR_DIA = 8;
-const MINS_POR_DIA  = HORAS_POR_DIA * MINS_POR_HORA; // 480
+const HORAS_POR_DIA = 5;
+const MINS_POR_DIA  = HORAS_POR_DIA * MINS_POR_HORA; // 300
 
 // Límites de minutos para cada tipo de permiso
 const LIMITES_MIN = {

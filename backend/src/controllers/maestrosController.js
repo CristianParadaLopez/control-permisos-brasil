@@ -1,33 +1,49 @@
-const { PrismaClient } = require('@prisma/client');
 const { obtenerSaldo } = require('../services/saldoService');
 const prisma = require('../lib/prisma');
 
-
-// Función para listar maestros. Si se proporciona el parámetro anoEscolarId, también adjunta el saldo de permisos de cada maestro para ese año escolar.
 async function listar(req, res) {
   try {
-    const { anoEscolarId } = req.query;
-    const maestros = await prisma.maestro.findMany({
-      where:   { activo: true },
-      orderBy: { nombreCompleto: 'asc' },
-    });
-    // Si viene anoEscolarId, adjuntar saldo de cada maestro
+    const { anoEscolarId, busqueda, pagina = 1, limite = 20, incluirInactivos } = req.query;
+    const skip = (Number(pagina) - 1) * Number(limite);
+
+    const where = {};
+    if (!incluirInactivos || incluirInactivos === 'false') {
+      where.activo = true;
+    }
+
+    if (busqueda) {
+      where.OR = [
+        { nombreCompleto: { contains: busqueda, mode: 'insensitive' } },
+        { nipEscalafon:   { contains: busqueda, mode: 'insensitive' } },
+      ];
+    }
+
+    const [maestros, total] = await Promise.all([
+      prisma.maestro.findMany({
+        where,
+        orderBy: { nombreCompleto: 'asc' },
+        skip,
+        take: Number(limite),
+      }),
+      prisma.maestro.count({ where }),
+    ]);
+
+    let resultado = maestros;
     if (anoEscolarId) {
-      const conSaldo = await Promise.all(
+      resultado = await Promise.all(
         maestros.map(async (m) => ({
           ...m,
           saldo: await obtenerSaldo(m.id, anoEscolarId),
         }))
       );
-      return res.json(conSaldo);
     }
-    res.json(maestros);
+
+    res.json({ data: resultado, total, pagina: Number(pagina), totalPaginas: Math.ceil(total / Number(limite)) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 }
 
-// Función para crear un nuevo maestro. Recibe los datos del maestro en el cuerpo de la solicitud y lo guarda en la base de datos.
 async function crear(req, res) {
   try {
     const maestro = await prisma.maestro.create({ data: req.body });
@@ -37,25 +53,28 @@ async function crear(req, res) {
   }
 }
 
-// Función para obtener un maestro por su ID. Si el maestro no existe, devuelve un error 404.
 async function obtener(req, res) {
   try {
-    const maestro = await prisma.maestro.findUnique({
-      where: { id: req.params.id },
-    });
+    const { anoEscolarId } = req.query;
+    const maestro = await prisma.maestro.findUnique({ where: { id: req.params.id } });
     if (!maestro) return res.status(404).json({ error: 'Maestro no encontrado' });
+
+    if (anoEscolarId) {
+      const saldo = await obtenerSaldo(maestro.id, anoEscolarId);
+      return res.json({ ...maestro, saldo });
+    }
     res.json(maestro);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 }
 
-// Función para actualizar un maestro existente. Recibe los datos actualizados en el cuerpo de la solicitud y el ID del maestro en los parámetros de la ruta.
 async function actualizar(req, res) {
   try {
+    const { nipEscalafon, nombreCompleto, tipoContratacion } = req.body;
     const maestro = await prisma.maestro.update({
       where: { id: req.params.id },
-      data:  req.body,
+      data:  { nipEscalafon, nombreCompleto, tipoContratacion },
     });
     res.json(maestro);
   } catch (e) {
@@ -63,4 +82,74 @@ async function actualizar(req, res) {
   }
 }
 
-module.exports = { listar, crear, obtener, actualizar };
+async function desactivar(req, res) {
+  try {
+    const maestro = await prisma.maestro.update({
+      where: { id: req.params.id },
+      data:  { activo: false },
+    });
+    res.json({ 
+      mensaje: 'Maestro desactivado correctamente. Sus permisos históricos se conservan.', 
+      maestro 
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+async function reactivar(req, res) {
+  try {
+    const maestro = await prisma.maestro.update({
+      where: { id: req.params.id },
+      data:  { activo: true },
+    });
+    res.json({ 
+      mensaje: 'Maestro reactivado correctamente.', 
+      maestro 
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+async function eliminarPermanente(req, res) {
+  try {
+    const maestro = await prisma.maestro.findUnique({ 
+      where: { id: req.params.id },
+      include: { anos: true, permisos: true }
+    });
+    
+    if (!maestro) return res.status(404).json({ error: 'Maestro no encontrado' });
+    if (maestro.activo) return res.status(400).json({ error: 'No puedes eliminar un maestro activo. Desactívalo primero.' });
+    
+    const updatedAt = new Date(maestro.updatedAt);
+    const tresMesesAtras = new Date();
+    tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3);
+    if (updatedAt > tresMesesAtras) {
+      return res.status(400).json({ 
+        error: 'Deben pasar 3 meses de inactividad para poder eliminar permanentemente.' 
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.maestroAno.deleteMany({ where: { maestroId: req.params.id } }),
+      prisma.permiso.deleteMany({ where: { maestroId: req.params.id } }),
+      prisma.maestro.delete({ where: { id: req.params.id } }),
+    ]);
+
+    res.json({ mensaje: 'Maestro eliminado permanentemente junto con todos sus registros.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// ✅ EXPORTAR TODO — esto es lo que debe coincidir con ctrl.* en la ruta
+module.exports = { 
+  listar, 
+  crear, 
+  obtener, 
+  actualizar, 
+  desactivar, 
+  reactivar, 
+  eliminarPermanente 
+};

@@ -1,188 +1,203 @@
 const ExcelJS          = require('exceljs');
-const { calcularSaldo } = require('../utils/timeConverter');
+const path             = require('path');
 const prisma           = require('../lib/prisma');
+const { fromMinutos, calcularSaldo } = require('../utils/timeConverter');
 
-async function generarReporte(anoEscolarId, mes) {
+const VERDE  = 'FF248842';
+const AMARI  = 'FFFAD327';
+const MARRON = 'FF7A3F25';
+const BLANCO = 'FFFFFFFF';
+const VERDE_CLARO = 'FFD6EDDB';
+
+async function generarReporte(anoEscolarId, mes, maestroId) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Sistema Control Permisos';
+
+  const ano = await prisma.anoEscolar.findUnique({ where: { id: anoEscolarId } });
+
+  // ✅ CORREGIDO: Construir where con soporte para maestroId
   const where = { anoEscolarId };
+  if (maestroId) where.maestroId = maestroId;
   if (mes) {
-    const inicio = new Date(mes + '-01');
-    const fin    = new Date(inicio.getFullYear(), inicio.getMonth() + 1, 0);
-    where.fechaInicio = { gte: inicio, lte: fin };
+    const [anio, mesNum] = mes.split('-').map(Number);
+    where.fechaInicio = {
+      gte: new Date(Date.UTC(anio, mesNum - 1, 1)),
+      lte: new Date(Date.UTC(anio, mesNum, 0, 23, 59, 59)),
+    };
   }
 
   const permisos = await prisma.permiso.findMany({
     where,
     include: { maestro: true },
-    orderBy: { fechaInicio: 'asc' },
+    orderBy: [{ maestro: { nombreCompleto: 'asc' } }, { fechaInicio: 'asc' }],
   });
 
-  const ano = await prisma.anoEscolar.findUnique({ where: { id: anoEscolarId } });
-
-  // Agrupar permisos por maestro
-  const porMaestro = {};
-  for (const p of permisos) {
-    if (!porMaestro[p.maestroId]) {
-      porMaestro[p.maestroId] = { maestro: p.maestro, permisos: [] };
-    }
-    porMaestro[p.maestroId].permisos.push(p);
+  const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  
+  // ✅ CORREGIDO: Título dinámico según filtro
+  let mesTitulo;
+  if (mes) {
+    mesTitulo = MESES_ES[Number(mes.split('-')[1]) - 1] + ' ' + mes.split('-')[0];
+  } else if (maestroId) {
+    const m = await prisma.maestro.findUnique({ where: { id: maestroId } });
+    mesTitulo = `Maestro: ${m?.nombreCompleto || 'Desconocido'} — Año ${ano?.anio || new Date().getFullYear()}`;
+  } else {
+    mesTitulo = String(ano?.anio || new Date().getFullYear());
   }
 
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Control de Permisos');
+  const ws = wb.addWorksheet('Reporte Permisos', { 
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1 } 
+  });
 
-  // ── Colores institucionales ──
-  const VERDE      = 'FF70AD47';
-  const VERDE_CLARO= 'FFE2EFDA';
-  const AZUL       = 'FF4472C4';
-  const GRIS       = 'FFD9D9D9';
-  const AMARILLO   = 'FFFFC000';
-  const BORDE = {
-    top:    { style: 'thin' },
-    left:   { style: 'thin' },
-    bottom: { style: 'thin' },
-    right:  { style: 'thin' },
+  // ── Columnas ──
+  ws.columns = [
+    { key: 'nip',     width: 14 },
+    { key: 'nombre',  width: 32 },
+    { key: 'tipo',    width: 14 },
+    { key: 'inicio',  width: 14 },
+    { key: 'fin',     width: 14 },
+    { key: 'eDias',   width: 8 },
+    { key: 'eHoras',  width: 8 },
+    { key: 'eMins',   width: 8 },
+    { key: 'eSalDia', width: 10 },
+    { key: 'eSalHor', width: 10 },
+    { key: 'eSalMin', width: 10 },
+    { key: 'pDias',   width: 8 },
+    { key: 'pHoras',  width: 8 },
+    { key: 'pMins',   width: 8 },
+    { key: 'pSalDia', width: 10 },
+    { key: 'pSalHor', width: 10 },
+    { key: 'pSalMin', width: 10 },
+    { key: 'obs',     width: 24 },
+  ];
+
+  // ── Filas 1-3: Encabezado institucional ──
+  ws.mergeCells('A1:R1');
+  const celdaTitulo = ws.getCell('A1');
+  celdaTitulo.value = 'COMPLEJO EDUCATIVO REPÚBLICA DEL BRASIL';
+  celdaTitulo.font  = { name: 'Arial', bold: true, size: 16, color: { argb: BLANCO } };
+  celdaTitulo.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+  celdaTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 36;
+
+  try {
+    const logoPath = path.join(__dirname, '..', '..', '..', 'frontend', 'public', 'logo.webp');
+    const logoId = wb.addImage({ filename: logoPath, extension: 'png' });
+    ws.addImage(logoId, { tl: { col: 0, row: 0 }, br: { col: 1, row: 2 }, editAs: 'oneCell' });
+  } catch { /* sin logo */ }
+
+  ws.mergeCells('A2:R2');
+  const celdaInfra = ws.getCell('A2');
+  celdaInfra.value = 'Infraestructura: 11661';
+  celdaInfra.font  = { name: 'Arial', bold: true, size: 12, color: { argb: BLANCO } };
+  celdaInfra.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+  celdaInfra.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 22;
+
+  ws.mergeCells('A3:R3');
+  const celdaSub = ws.getCell('A3');
+  celdaSub.value = `Reporte de permisos de personal docente correspondiente al ${mesTitulo}`;
+  celdaSub.font  = { name: 'Arial', bold: true, size: 11, color: { argb: MARRON } };
+  celdaSub.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: AMARI } };
+  celdaSub.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(3).height = 20;
+
+  ws.getRow(4).height = 6;
+
+  // ── Filas 5-6: Encabezados de tabla ──
+  const estCabeza = (celda, texto) => {
+    celda.value     = texto;
+    celda.font      = { name: 'Arial', bold: true, size: 9, color: { argb: BLANCO } };
+    celda.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+    celda.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    celda.border    = { 
+      top: { style: 'thin', color: { argb: VERDE_CLARO } }, 
+      bottom: { style: 'thin', color: { argb: VERDE_CLARO } }, 
+      left: { style: 'thin', color: { argb: VERDE_CLARO } }, 
+      right: { style: 'thin', color: { argb: VERDE_CLARO } } 
+    };
   };
 
-  // ── Fila 1: Título institucional ──
-  ws.mergeCells('A1:S1');
-  const t1 = ws.getCell('A1');
-  t1.value = 'COMPLEJO EDUCATIVO REPÚBLICA DE BRASIL';
-  t1.font  = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
-  t1.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
-  t1.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 22;
+  ws.mergeCells('A5:B5'); estCabeza(ws.getCell('A5'), 'Identificación');
+  ws.mergeCells('C5:E5'); estCabeza(ws.getCell('C5'), 'Contratación / Fechas');
+  ws.mergeCells('F5:K5'); estCabeza(ws.getCell('F5'), 'Enfermedad con certificado médico (90 días)');
+  ws.mergeCells('L5:Q5'); estCabeza(ws.getCell('L5'), 'Motivos personales (5 días)');
+  ws.getCell('R5').value = ''; 
+  ws.getCell('R5').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } };
+  ws.getRow(5).height = 30;
 
-  // ── Fila 2: Subtítulo ──
-  ws.mergeCells('A2:S2');
-  const t2 = ws.getCell('A2');
-  t2.value = `CONTROL DE PERMISOS DEL PERSONAL DOCENTE — AÑO ESCOLAR ${ano?.anio || new Date().getFullYear()}`;
-  t2.font  = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-  t2.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
-  t2.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(2).height = 18;
-
-  // ── Fila 3: Encabezados grupo nivel 1 ──
-  // Col A: NIP, B: Nombre, C: Tipo contratación (3 sub), F: Fecha (2 sub),
-  // H: Enfermedad (3 sub), K: Saldo Enf (3 sub), N: Personal (3 sub), Q: Saldo Pers (3 sub)
-  const styleHeader = (cell, value, color = VERDE) => {
-    cell.value = value;
-    cell.font  = { bold: true, size: 9, color: { argb: 'FF000000' } };
-    cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.border = BORDE;
-  };
-
-  // Fila 3 — grupos
-  ws.mergeCells('A3:A4'); styleHeader(ws.getCell('A3'), 'NIP o\nEscalafón', GRIS);
-  ws.mergeCells('B3:B4'); styleHeader(ws.getCell('B3'), 'Nombre completo', GRIS);
-  ws.mergeCells('C3:E3'); styleHeader(ws.getCell('C3'), 'Tipo de contratación', GRIS);
-  ws.mergeCells('F3:G3'); styleHeader(ws.getCell('F3'), 'Fecha', GRIS);
-  ws.mergeCells('H3:J3'); styleHeader(ws.getCell('H3'), 'Enfermedad con Certificado Médico\n(90 días)', VERDE);
-  ws.mergeCells('K3:M3'); styleHeader(ws.getCell('K3'), 'Saldo disponible\nEnfermedad', VERDE_CLARO);
-  ws.mergeCells('N3:P3'); styleHeader(ws.getCell('N3'), 'Motivos Personales\n(5 días)', AMARILLO);
-  ws.mergeCells('Q3:S3'); styleHeader(ws.getCell('Q3'), 'Saldo disponible\nPersonales', 'FFFFF2CC');
-
-  ws.getRow(3).height = 30;
-
-  // Fila 4 — subencabezados
-  styleHeader(ws.getCell('C4'), 'Sueldo Base', GRIS);
-  styleHeader(ws.getCell('D4'), 'Sobre Sueldo', GRIS);
-  styleHeader(ws.getCell('E4'), 'Horas Clase', GRIS);
-  styleHeader(ws.getCell('F4'), 'Inicia', GRIS);
-  styleHeader(ws.getCell('G4'), 'Finaliza', GRIS);
-  styleHeader(ws.getCell('H4'), 'Día', VERDE);
-  styleHeader(ws.getCell('I4'), 'Hora', VERDE);
-  styleHeader(ws.getCell('J4'), 'Min.', VERDE);
-  styleHeader(ws.getCell('K4'), 'Día', VERDE_CLARO);
-  styleHeader(ws.getCell('L4'), 'Hora', VERDE_CLARO);
-  styleHeader(ws.getCell('M4'), 'Min.', VERDE_CLARO);
-  styleHeader(ws.getCell('N4'), 'Día', AMARILLO);
-  styleHeader(ws.getCell('O4'), 'Hora', AMARILLO);
-  styleHeader(ws.getCell('P4'), 'Min.', AMARILLO);
-  styleHeader(ws.getCell('Q4'), 'Día', 'FFFFF2CC');
-  styleHeader(ws.getCell('R4'), 'Hora', 'FFFFF2CC');
-  styleHeader(ws.getCell('S4'), 'Min.', 'FFFFF2CC');
-
-  ws.getRow(4).height = 18;
+  const sub = (letra, texto) => estCabeza(ws.getCell(`${letra}6`), texto);
+  sub('A','NIP/Escalafón'); sub('B','Nombre completo'); sub('C','Tipo contratación');
+  sub('D','Inicio'); sub('E','Fin');
+  sub('F','Días'); sub('G','Horas'); sub('H','Min.');
+  sub('I','Saldo Días'); sub('J','Saldo Hrs'); sub('K','Saldo Min.');
+  sub('L','Días'); sub('M','Horas'); sub('N','Min.');
+  sub('O','Saldo Días'); sub('P','Saldo Hrs'); sub('Q','Saldo Min.');
+  sub('R','Observación');
+  ws.getRow(6).height = 30;
 
   // ── Filas de datos ──
-  const fmt = (d) => d ? new Date(d).toLocaleDateString('es-SV') : '';
-  let rowNum = 5;
+  let filaNum = 7;
+  const fmtFecha = (d) => d ? new Date(d).toLocaleDateString('es-SV', { 
+    day:'2-digit', month:'2-digit', year:'numeric', timeZone:'UTC' 
+  }) : '';
 
-  for (const { maestro, permisos: mPermisos } of Object.values(porMaestro)) {
-    const saldoAno = await prisma.maestroAno.findUnique({
-      where: { maestroId_anoEscolarId: { maestroId: maestro.id, anoEscolarId } },
+  for (const [i, p] of permisos.entries()) {
+    const saldoReg = await prisma.maestroAno.findUnique({
+      where: { maestroId_anoEscolarId: { maestroId: p.maestroId, anoEscolarId } },
     });
-    const saldoEnf  = calcularSaldo('ENFERMEDAD', saldoAno?.enfMinUsados  || 0).disponible;
-    const saldoPers = calcularSaldo('PERSONAL',   saldoAno?.persMinUsados || 0).disponible;
+    const sEnf  = calcularSaldo('ENFERMEDAD', saldoReg?.enfMinUsados || 0).disponible;
+    const sPers = calcularSaldo('PERSONAL',   saldoReg?.persMinUsados || 0).disponible;
+    const esPar = i % 2 === 0;
+    const fondoDato = { type: 'pattern', pattern: 'solid', fgColor: { argb: esPar ? 'FFF2F8F4' : BLANCO } };
 
-    for (const p of mPermisos) {
-      const row = ws.getRow(rowNum);
-      const isEnf = p.tipo === 'ENFERMEDAD';
+    const fila = ws.getRow(filaNum);
+    const estDato = (celda, valor, esNum = false) => {
+      celda.value     = valor ?? '';
+      celda.font      = { name: 'Arial', size: 9 };
+      celda.fill      = fondoDato;
+      celda.alignment = { horizontal: esNum ? 'center' : 'left', vertical: 'middle', wrapText: false };
+      celda.border    = { 
+        bottom: { style: 'hair', color: { argb: 'FFD0E8D8' } }, 
+        right: { style: 'hair', color: { argb: 'FFD0E8D8' } } 
+      };
+    };
 
-      const datos = [
-        maestro.nipEscalafon,                          // A
-        maestro.nombreCompleto,                        // B
-        maestro.tipoContratacion === 'Sueldo Base'  ? '✓' : '', // C
-        maestro.tipoContratacion === 'Sobre Sueldo' ? '✓' : '', // D
-        maestro.tipoContratacion === 'Horas Clase'  ? '✓' : '', // E
-        fmt(p.fechaInicio),                            // F
-        fmt(p.fechaFin),                               // G
-        isEnf ? p.dias    : '',                        // H
-        isEnf ? p.horas   : '',                        // I
-        isEnf ? p.minutos : '',                        // J
-        isEnf ? saldoEnf.dias    : '',                 // K
-        isEnf ? saldoEnf.horas   : '',                 // L
-        isEnf ? saldoEnf.minutos : '',                 // M
-        !isEnf ? p.dias    : '',                       // N
-        !isEnf ? p.horas   : '',                       // O
-        !isEnf ? p.minutos : '',                       // P
-        !isEnf ? saldoPers.dias    : '',               // Q
-        !isEnf ? saldoPers.horas   : '',               // R
-        !isEnf ? saldoPers.minutos : '',               // S
-      ];
+    const isEnf  = p.tipo === 'ENFERMEDAD';
+    const isPers = p.tipo === 'PERSONAL';
 
-      datos.forEach((val, i) => {
-        const cell = row.getCell(i + 1);
-        cell.value = val;
-        cell.border = BORDE;
-        cell.alignment = { horizontal: i < 2 ? 'left' : 'center', vertical: 'middle' };
-        cell.font = { size: 9 };
-        if (rowNum % 2 === 0) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
-        }
-      });
+    estDato(fila.getCell('A'), p.maestro.nipEscalafon);
+    estDato(fila.getCell('B'), p.maestro.nombreCompleto);
+    estDato(fila.getCell('C'), p.maestro.tipoContratacion);
+    estDato(fila.getCell('D'), fmtFecha(p.fechaInicio));
+    estDato(fila.getCell('E'), fmtFecha(p.fechaFin));
+    estDato(fila.getCell('F'), isEnf ? (p.dias || '') : '', true);
+    estDato(fila.getCell('G'), isEnf ? (p.horas || '') : '', true);
+    estDato(fila.getCell('H'), isEnf ? (p.minutos || '') : '', true);
+    estDato(fila.getCell('I'), isEnf ? sEnf.dias : '', true);
+    estDato(fila.getCell('J'), isEnf ? sEnf.horas : '', true);
+    estDato(fila.getCell('K'), isEnf ? sEnf.minutos : '', true);
+    estDato(fila.getCell('L'), isPers ? (p.dias || '') : '', true);
+    estDato(fila.getCell('M'), isPers ? (p.horas || '') : '', true);
+    estDato(fila.getCell('N'), isPers ? (p.minutos || '') : '', true);
+    estDato(fila.getCell('O'), isPers ? sPers.dias : '', true);
+    estDato(fila.getCell('P'), isPers ? sPers.horas : '', true);
+    estDato(fila.getCell('Q'), isPers ? sPers.minutos : '', true);
+    estDato(fila.getCell('R'), p.observacion || '');
 
-      row.height = 16;
-      rowNum++;
-    }
+    fila.height = 16;
+    filaNum++;
   }
 
-  // ── Fila de firma ──
-  rowNum += 2;
-  ws.mergeCells(`A${rowNum}:S${rowNum}`);
-  ws.getCell(`A${rowNum}`).value = 'F_______________________________________';
-  ws.getCell(`A${rowNum}`).alignment = { horizontal: 'left' };
-  rowNum++;
-  ws.mergeCells(`A${rowNum}:S${rowNum}`);
-  ws.getCell(`A${rowNum}`).value = 'Nombre: Lic. Francisco Gerber Ramírez Ardona';
-  ws.getCell(`A${rowNum}`).font  = { bold: true, size: 10 };
-  rowNum++;
-  ws.mergeCells(`A${rowNum}:S${rowNum}`);
-  ws.getCell(`A${rowNum}`).value = 'Director de Centro Educativo';
-  ws.getCell(`A${rowNum}`).font  = { size: 10 };
-
-  // ── Anchos de columna ──
-  ws.getColumn('A').width = 12;
-  ws.getColumn('B').width = 30;
-  ws.getColumn('C').width = 11;
-  ws.getColumn('D').width = 11;
-  ws.getColumn('E').width = 11;
-  ws.getColumn('F').width = 11;
-  ws.getColumn('G').width = 11;
-  ['H','I','J','K','L','M','N','O','P','Q','R','S'].forEach(c => {
-    ws.getColumn(c).width = 7;
-  });
+  // ── Firma ──
+  filaNum += 2;
+  ws.getRow(filaNum).getCell('A').value = 'F';
+  filaNum++;
+  ws.getRow(filaNum).getCell('A').value = 'Nombre: Lic. Francisco Gerber Ramírez Ardona';
+  ws.getRow(filaNum).getCell('A').font  = { name: 'Arial', bold: true, size: 10 };
+  filaNum++;
+  ws.getRow(filaNum).getCell('A').value = 'Director de Centro Educativo';
+  ws.getRow(filaNum).getCell('A').font  = { name: 'Arial', size: 10 };
 
   return wb.xlsx.writeBuffer();
 }

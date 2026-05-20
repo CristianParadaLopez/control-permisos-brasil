@@ -1,57 +1,68 @@
-const { PrismaClient } = require('@prisma/client');
-const { toMinutos }    = require('../utils/timeConverter');
-const { descontarSaldo, obtenerSaldo } = require('../services/saldoService');
+const { toMinutos } = require('../utils/timeConverter');
+const { descontarSaldo } = require('../services/saldoService');
 const prisma = require('../lib/prisma');
 
-
-// Función para listar permisos. Permite filtrar por maestro, año escolar y mes. Devuelve los permisos junto con la información del maestro.
 async function listar(req, res) {
   try {
-    const { maestroId, anoEscolarId, mes } = req.query;
+    const { maestroId, anoEscolarId, mes, tipo, pagina = 1, limite = 10 } = req.query;
+    const skip = (Number(pagina) - 1) * Number(limite);
+
     const where = {};
     if (maestroId)    where.maestroId    = maestroId;
     if (anoEscolarId) where.anoEscolarId = anoEscolarId;
+    if (tipo)         where.tipo         = tipo;
     if (mes) {
-      const inicio = new Date(mes + '-01');
-      const fin    = new Date(inicio.getFullYear(), inicio.getMonth() + 1, 0);
-      where.fechaInicio = { gte: inicio, lte: fin };
+      // Usar UTC para evitar desfase de zona horaria
+      const [anio, mesNum] = mes.split('-').map(Number);
+      where.fechaInicio = {
+        gte: new Date(Date.UTC(anio, mesNum - 1, 1)),
+        lte: new Date(Date.UTC(anio, mesNum, 0, 23, 59, 59)),
+      };
     }
-    // Recuperar permisos con filtros y datos del maestro
-    const permisos = await prisma.permiso.findMany({
-      where,
-      include: { maestro: true },
-      orderBy: { fechaInicio: 'desc' },
+
+    const [permisos, total] = await Promise.all([
+      prisma.permiso.findMany({
+        where,
+        include: { maestro: true },
+        orderBy: { fechaInicio: 'desc' },
+        skip,
+        take: Number(limite),
+      }),
+      prisma.permiso.count({ where }),
+    ]);
+
+    res.json({
+      data:       permisos,
+      total,
+      pagina:     Number(pagina),
+      totalPaginas: Math.ceil(total / Number(limite)),
     });
-    res.json(permisos);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 }
 
-// Función para crear un nuevo permiso. Recibe los datos del permiso en el cuerpo de la solicitud, calcula el total en minutos, descuenta del saldo del maestro y guarda el permiso en la base de datos.
 async function crear(req, res) {
   try {
     const { maestroId, anoEscolarId, tipo, fechaInicio, fechaFin, dias, horas, minutos, observacion } = req.body;
 
-    // Calcular total en minutos
-    const totalMinutos = toMinutos(dias, horas, minutos);
-    if (totalMinutos === 0) return res.status(400).json({ error: 'Debes ingresar al menos un minuto de permiso' });
+    const totalMinutos = toMinutos(Number(dias) || 0, Number(horas) || 0, Number(minutos) || 0);
+    if (totalMinutos === 0) return res.status(400).json({ error: 'Debes ingresar al menos 1 minuto de permiso' });
 
-    // Descontar del saldo (lanza error si no hay saldo)
-    await descontarSaldo(maestroId, anoEscolarId, tipo, dias, horas, minutos);
+    // Descontar del saldo — lanza error si no alcanza
+    await descontarSaldo(maestroId, anoEscolarId, tipo, Number(dias) || 0, Number(horas) || 0, Number(minutos) || 0);
 
-    // Crear el permiso en la base de datos
     const permiso = await prisma.permiso.create({
       data: {
         maestroId, anoEscolarId, tipo,
-        fechaInicio: new Date(fechaInicio),
-        fechaFin:    new Date(fechaFin),
-        dias:    Number(dias)    || 0,
-        horas:   Number(horas)   || 0,
-        minutos: Number(minutos) || 0,  
+        fechaInicio:  new Date(fechaInicio),
+        fechaFin:     new Date(fechaFin),
+        dias:         Number(dias)    || 0,
+        horas:        Number(horas)   || 0,
+        minutos:      Number(minutos) || 0,
         totalMinutos,
-        observacion,
-        creadoPor: req.usuario.email,
+        observacion:  observacion || null,
+        creadoPor:    req.usuario.email,
       },
       include: { maestro: true },
     });
@@ -61,10 +72,8 @@ async function crear(req, res) {
   }
 }
 
-// Función para eliminar un permiso. Recupera el permiso para devolver el saldo al maestro, luego elimina el permiso de la base de datos.
 async function eliminar(req, res) {
   try {
-    // Recuperar el permiso para devolver el saldo
     const permiso = await prisma.permiso.findUnique({ where: { id: req.params.id } });
     if (!permiso) return res.status(404).json({ error: 'Permiso no encontrado' });
 

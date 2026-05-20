@@ -1,6 +1,6 @@
 import api from './api';
 
-export const getPermisos = (params) =>
+export const getPermisos = (params = {}) =>
   api.get('/permisos', { params }).then(r => r.data);
 
 export const crearPermiso = (data) =>

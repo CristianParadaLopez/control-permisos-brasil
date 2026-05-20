@@ -208,8 +208,8 @@ export default function ListaMaestros() {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const data = await getMaestros();
-      setMaestros(data);
+      const res = await getMaestros({ limite: 100 });
+      setMaestros(res.data || []);  // ← extraer el array del objeto
     } catch (err) {
       console.error(err);
     } finally {
